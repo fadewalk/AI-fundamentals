@@ -354,12 +354,14 @@ FONTS_JS = """(function () {
     { id: 'default', name: '字体：默认黑体' },
     { id: 'song', name: '字体：宋体' },
     { id: 'kai', name: '字体：楷体' },
-    { id: 'fang', name: '字体：仿宋' }
+    { id: 'fang', name: '字体：仿宋' },
+    { id: 'yahei', name: '字体：雅黑等宽' }
   ];
   var STACK = {
     song: '"Songti SC","STSong","SimSun","Noto Serif SC",serif',
     kai: '"Kaiti SC","STKaiti","KaiTi","Noto Serif SC",serif',
-    fang: '"Fangti SC","STFangsong","FangSong","Noto Serif SC",serif'
+    fang: '"Fangti SC","STFangsong","FangSong","Noto Serif SC",serif',
+    yahei: '"Microsoft YaHei Mono","Sarasa Mono SC","Microsoft YaHei","PingFang SC",monospace'
   };
   function cur() { try { return localStorage.getItem(KEY) || 'default'; } catch (e) { return 'default'; } }
   function apply() {
