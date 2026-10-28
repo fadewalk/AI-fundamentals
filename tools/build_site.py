@@ -350,18 +350,13 @@ MERMAID_INIT = """(function () {
 FONTS_JS = """(function () {
   'use strict';
   var FKEY = 'aivc_docs_font', SKEY = 'aivc_docs_size';
+  var MIN = 70, MAX = 150, STEP = 5, BASE = 0.8; /* 正文基准 .8rem，按百分比我缩放 */
   var FONTS = [
     { id: 'default', name: '字体：默认黑体' },
     { id: 'song', name: '字体：宋体' },
     { id: 'kai', name: '字体：楷体' },
     { id: 'fang', name: '字体：仿宋' },
     { id: 'yahei', name: '字体：雅黑等宽' }
-  ];
-  var SIZES = [
-    { id: 's', name: '大小：较小' },
-    { id: 'm', name: '大小：默认' },
-    { id: 'l', name: '大小：较大' },
-    { id: 'xl', name: '大小：特大' }
   ];
   var STACK = {
     song: '"Songti SC","STSong","SimSun","Noto Serif SC",serif',
@@ -372,50 +367,63 @@ FONTS_JS = """(function () {
   function get(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
   function set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
   function fontId() { var id = get(FKEY, 'default'); return STACK[id] ? id : 'default'; }
-  function sizeId() { var id = get(SKEY, 'm'); return ['s','m','l','xl'].indexOf(id) >= 0 ? id : 'm'; }
+  function sizePct() { var n = parseInt(get(SKEY, '100'), 10); if (isNaN(n) || n < MIN || n > MAX) n = 100; return n; }
   function apply() {
-    document.documentElement.setAttribute('data-docfont', fontId());
-    document.documentElement.setAttribute('data-docsize', sizeId());
-    var f = document.getElementById('docfont-select'); if (f) f.value = fontId();
-    var z = document.getElementById('docsize-select'); if (z) z.value = sizeId();
+    var f = fontId(), p = sizePct();
+    document.documentElement.setAttribute('data-docfont', f);
+    document.documentElement.setAttribute('data-docsize', String(p));
+    var fs = document.getElementById('docfont-select'); if (fs) fs.value = f;
+    var v = document.getElementById('docsize-val'); if (v) v.textContent = p + '%';
+    var mi = document.getElementById('docsize-minus'), pl = document.getElementById('docsize-plus');
+    if (mi) mi.style.opacity = p <= MIN ? .35 : 1;
+    if (pl) pl.style.opacity = p >= MAX ? .35 : 1;
   }
-  function mkSelect(id, label, items, isFont) {
-    var sel = document.createElement('select');
-    sel.id = id; sel.setAttribute('aria-label', label);
-    items.forEach(function (it) {
-      var o = document.createElement('option');
-      o.value = it.id; o.textContent = it.name;
-      sel.appendChild(o);
-    });
-    sel.value = isFont ? fontId() : sizeId();
-    sel.addEventListener('change', function () { set(isFont ? FKEY : SKEY, sel.value); apply(); });
-    return sel;
+  function bump(d) {
+    var p = Math.min(MAX, Math.max(MIN, sizePct() + d));
+    set(SKEY, String(p)); apply();
   }
   function inject() {
     var css = document.createElement('style');
-    var rules = Object.keys(STACK).map(function (id) {
+    var fontRules = Object.keys(STACK).map(function (id) {
       return 'html[data-docfont="' + id + '"]{--md-text-font:' + STACK[id] + '!important;--md-text-font-family:' + STACK[id] + '!important}';
     }).join('');
-    var sizes = { s: '.72rem', m: '.8rem', l: '.92rem', xl: '1.05rem' };
-    var sizeRules = Object.keys(sizes).map(function (id) {
-      return 'html[data-docsize="' + id + '"] .md-typeset{font-size:' + sizes[id] + '}';
-    }).join('');
-    css.textContent = rules + sizeRules
+    var sizeRules = '';
+    for (var p = MIN; p <= MAX; p += STEP) {
+      sizeRules += 'html[data-docsize="' + p + '"] .md-typeset{font-size:' + (BASE * p / 100).toFixed(3) + 'rem}';
+    }
+    css.textContent = fontRules + sizeRules
       + '.docfont-wrap{display:inline-flex;align-items:center;margin:0 8px 0 2px;flex-shrink:0}'
       + '.docfont-wrap select{appearance:none;-webkit-appearance:none;-moz-appearance:none;border:0;outline:0;color:inherit;'
       + 'background:rgba(255,255,255,.14) url("data:image/svg+xml;charset=utf-8,' + "%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Cpath fill=%22%23fff%22 d=%22M7 10l5 5 5-5z%22/%3E%3C/svg%3E" + '") no-repeat right 5px center;'
       + 'border-radius:7px;font-size:12.5px;line-height:1;padding:6px 24px 6px 10px;cursor:pointer;max-width:130px;height:28px}'
       + '.docfont-wrap select option{color:#1a1d23;background:#fff}'
-      + '#docsize-select{max-width:104px;padding:6px 20px 6px 10px}'
-      + '@media screen and (max-width:44.98em){.docfont-wrap{margin:0 6px 0 0}.docfont-wrap select{font-size:11.5px;padding:5px 20px 5px 8px;max-width:104px;height:26px}#docsize-select{max-width:76px;padding:5px 18px 5px 8px}}';
+      + '#docsize-wrap{gap:0;background:rgba(255,255,255,.14);border-radius:7px;height:28px}'
+      + '#docsize-wrap button{border:0;background:transparent;color:inherit;cursor:pointer;font-size:15px;line-height:1;width:26px;height:100%;padding:0;opacity:.9}'
+      + '#docsize-wrap button:hover{opacity:1}'
+      + '#docsize-val{font-size:12px;line-height:1;min-width:38px;text-align:center}'
+      + '@media screen and (max-width:44.98em){.docfont-wrap{margin:0 6px 0 0}.docfont-wrap select{font-size:11.5px;padding:5px 20px 5px 8px;max-width:104px;height:26px}#docsize-wrap{height:26px;margin:0 6px 0 0}#docsize-val{min-width:32px;font-size:11px}}';
     document.head.appendChild(css);
     var opts = document.querySelectorAll('.md-header__option');
     var anchor = opts.length ? opts[opts.length - 1] : document.querySelector('.md-header__inner');
     if (!anchor) return;
     var w1 = document.createElement('span'); w1.className = 'docfont-wrap';
-    w1.appendChild(mkSelect('docfont-select', '正文字体', FONTS, true));
-    var w2 = document.createElement('span'); w2.className = 'docfont-wrap';
-    w2.appendChild(mkSelect('docsize-select', '正文大小', SIZES, false));
+    var sel = document.createElement('select');
+    sel.id = 'docfont-select'; sel.setAttribute('aria-label', '正文字体');
+    FONTS.forEach(function (m) {
+      var o = document.createElement('option');
+      o.value = m.id; o.textContent = m.name;
+      sel.appendChild(o);
+    });
+    sel.value = fontId();
+    sel.addEventListener('change', function () { set(FKEY, sel.value); apply(); });
+    w1.appendChild(sel);
+    var w2 = document.createElement('span'); w2.className = 'docfont-wrap'; w2.id = 'docsize-wrap';
+    var mi = document.createElement('button'); mi.id = 'docsize-minus'; mi.type = 'button'; mi.textContent = '−'; mi.setAttribute('aria-label', '缩小字号');
+    var val = document.createElement('span'); val.id = 'docsize-val';
+    var pl = document.createElement('button'); pl.id = 'docsize-plus'; pl.type = 'button'; pl.textContent = '+'; pl.setAttribute('aria-label', '放大字号');
+    mi.addEventListener('click', function () { bump(-STEP); });
+    pl.addEventListener('click', function () { bump(STEP); });
+    w2.appendChild(mi); w2.appendChild(val); w2.appendChild(pl);
     anchor.appendChild(w1);
     anchor.appendChild(w2);
   }
