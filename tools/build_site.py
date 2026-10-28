@@ -271,6 +271,7 @@ theme:
   language: zh
   features:
     - navigation.tracking
+    - navigation.footer
     - navigation.top
     - navigation.path
     - search.highlight
