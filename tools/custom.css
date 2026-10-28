@@ -1,0 +1,14 @@
+/* —— 站点精修（构建期注入，源仓库零改动） —— */
+/* 表格：表头底色 / 斑马纹 / 悬停 */
+.md-typeset table:not([class]) { font-size: .7rem; }
+.md-typeset table:not([class]) th { background: var(--md-default-fg-color--lightest); }
+.md-typeset table:not([class]) tbody tr { transition: background .15s; }
+.md-typeset table:not([class]) tbody tr:nth-child(even) { background: rgba(127,127,127,.05); }
+.md-typeset table:not([class]) tbody tr:hover { background: var(--md-code-bg-color); }
+/* 落地页章节卡片：hover 抬起 */
+.md-typeset .grid.cards > ul > li { transition: transform .2s, box-shadow .2s, border-color .2s; }
+.md-typeset .grid.cards > ul > li:hover { transform: translateY(-2px); border-color: var(--md-primary-fg-color); }
+/* 说明框圆角 */
+.md-typeset .admonition, .md-typeset details { border-radius: 8px; }
+/* 代码圆角 */
+.md-typeset pre > code { border-radius: 8px; }

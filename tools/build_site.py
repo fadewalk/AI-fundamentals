@@ -78,6 +78,9 @@ def copy_tree():
         shutil.copy2(src, dst)
         if src.suffix.lower() == ".md":
             n_md += 1
+    css_dir = DOCS / "css"
+    css_dir.mkdir(parents=True, exist_ok=True)
+    (css_dir / "custom.css").write_text(open(pathlib.Path(__file__).with_name("custom.css"), encoding="utf-8").read(), encoding="utf-8")
     return n_md, n_out
 
 
@@ -198,6 +201,24 @@ def nav_tree(base: pathlib.Path, rel_prefix=""):
     return items
 
 
+CH_META = {
+  "01_hardware_architecture": ("material-memory", "GPU 架构 / NVLink / PCIe / GPUDirect / 延迟金字塔"),
+  "02_dpu_programming": ("material-server-network", "DOCA / DPU 卸载编程"),
+  "02_gpu_programming": ("material-chip", "CUDA 范式 / Kernel 调优 / Profiling"),
+  "02_npu_programming": ("material-developer-board", "昇腾 Ascend C / NPU 生态"),
+  "03_ai_cluster_ops": ("material-dns", "GPU 运维 / IB 网络 / NCCL / XID 排障"),
+  "04_cloud_native_ai_platform": ("material-cloud", "K8s GPU 调度 / HAMi / Kueue / 存储"),
+  "05_model_training_and_fine_tuning": ("material-fire", "训练循环 / 并行策略 / SFT / 对齐 / 框架"),
+  "06_llm_theory_and_fundamentals": ("material-lightbulb-outline", "Token / Transformer / MoE / 量化"),
+  "07_rag_and_tools": ("material-text-search", "RAG / GraphRAG / 分块 / PDF 解析"),
+  "08_agentic_system": ("material-robot", "ReAct / MCP / 记忆 / 多 Agent"),
+  "09_inference_system": ("material-rocket-launch", "KV Cache / vLLM / SGLang / PD 分离 / 投机解码"),
+  "10_ai_related_course": ("material-school", "讲座 / 外部教程地图 / AI 编译器"),
+  "11_ai_native_everything": ("material-briefcase", "AI Native 方法论 / FDE 实践"),
+  "98_llm_programming": ("material-code-braces", "LangGraph / Spring AI / Harness"),
+  "99_misc": ("material-bookshelf", "上手机会 / 任务卡 / 书单"),
+}
+
 SECTION_INTRO = {}
 
 INDEX_MD = """# AI-Fundamentals · 中文 AI 基础设施知识库（导航增强版）
@@ -209,11 +230,16 @@ INDEX_MD = """# AI-Fundamentals · 中文 AI 基础设施知识库（导航增�
     原仓库 590+ 篇 Markdown 只有平铺的 README 链接树，没有菜单、没有搜索、来回跳转要反复"后退"。
     本站用 mkdocs-material 按目录结构自动生成导航，每周自动同步上游更新。
 
-## 从这里开始
+## 章节导航
 
-| 章节 | 内容 |
-|---|---|
+<div class="grid cards" markdown>
+
 {cards}
+
+</div>
+
+!!! tip "上手顺序建议"
+    按 `01 硬件 → 03 集群运维 → 04 云原生 → 05 训练 → 09 推理` 的顺序读，正好是一条 **AI Infra SRE 的成长路径**；98/99 章适合动手阶段再翻。
 
 ## 使用说明
 
@@ -242,7 +268,9 @@ def vendor_js():
     (js_dir / "mathjax.js").write_text(
         "window.MathJax = {tex: {inlineMath: [['\\\\(', '\\\\)']], displayMath: [['\\\\[', '\\\\]']]}, "
         "svg: {fontCache: 'global'}, "
-        "options: {skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']}};\n",
+        "options: {skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']}};\n"
+        "if (window.document$) { window.document$.subscribe(function () { "
+        "if (window.MathJax && window.MathJax.typesetPromise) window.MathJax.typesetPromise(); }); }\n",
         encoding="utf-8",
     )
     (js_dir / "mermaid-init.js").write_text(MERMAID_INIT, encoding="utf-8")
@@ -323,43 +351,57 @@ FONTS_JS = """(function () {
   'use strict';
   var KEY = 'aivc_docs_font';
   var MODES = [
-    { id: 'default', btn: '字A', name: '默认黑体', css: '' },
-    { id: 'song', btn: '宋', name: '宋体（衬线，适合长文阅读）', css: '"Songti SC","STSong","SimSun","Noto Serif SC",serif' },
-    { id: 'kai', btn: '楷', name: '楷体', css: '"Kaiti SC","STKaiti","KaiTi","Noto Serif SC",serif' },
-    { id: 'fang', btn: '仿', name: '仿宋', css: '"Fangti SC","STFangsong","FangSong","Noto Serif SC",serif' }
+    { id: 'default', name: '字体：默认黑体' },
+    { id: 'song', name: '字体：宋体' },
+    { id: 'kai', name: '字体：楷体' },
+    { id: 'fang', name: '字体：仿宋' }
   ];
+  var STACK = {
+    song: '"Songti SC","STSong","SimSun","Noto Serif SC",serif',
+    kai: '"Kaiti SC","STKaiti","KaiTi","Noto Serif SC",serif',
+    fang: '"Fangti SC","STFangsong","FangSong","Noto Serif SC",serif'
+  };
   function cur() { try { return localStorage.getItem(KEY) || 'default'; } catch (e) { return 'default'; } }
-  function mode() { var ids = MODES.map(function (m) { return m.id; }); var i = ids.indexOf(cur()); return MODES[i < 0 ? 0 : i]; }
   function apply() {
-    var m = mode();
-    document.documentElement.setAttribute('data-docfont', m.id);
-    var b = document.getElementById('docfont-btn');
-    if (b) { b.innerHTML = '<span class="lbl">字体</span><span>' + m.btn + '</span>'; b.title = '正文字体：' + m.name + '（点击切换）'; }
+    var id = cur();
+    if (!STACK[id]) id = 'default';
+    document.documentElement.setAttribute('data-docfont', id);
+    var s = document.getElementById('docfont-select');
+    if (s) s.value = id;
   }
   function inject() {
     var css = document.createElement('style');
-    var rules = MODES.filter(function (m) { return m.css; }).map(function (m) {
-      return 'html[data-docfont="' + m.id + '"]{--md-text-font:' + m.css + '!important;--md-text-font-family:' + m.css + '!important}';
+    var rules = Object.keys(STACK).map(function (id) {
+      return 'html[data-docfont="' + id + '"]{--md-text-font:' + STACK[id] + '!important;--md-text-font-family:' + STACK[id] + '!important}';
     }).join('');
-    css.textContent = rules + ''
-      + '#docfont-btn{position:fixed;right:.9rem;bottom:4.6rem;z-index:6;display:inline-flex;align-items:center;gap:5px;'
-      + 'font-size:13px;font-weight:600;line-height:1;padding:9px 12px;border:0;border-radius:999px;'
-      + 'background:var(--md-primary-fg-color,#2563eb);color:var(--md-primary-bg-color,#fff);cursor:pointer;'
-      + 'box-shadow:0 2px 8px rgba(0,0,0,.25);opacity:.92;transition:opacity .2s,transform .2s}'
-      + '#docfont-btn:hover{opacity:1;transform:translateY(-1px)}'
-      + '#docfont-btn .lbl{font-weight:400;font-size:11px;opacity:.8}';
+    css.textContent = rules
+      + '#docfont-wrap{display:inline-flex;align-items:center;margin:0 10px 0 2px;flex-shrink:0}'
+      + '#docfont-select{appearance:none;-webkit-appearance:none;-moz-appearance:none;border:0;outline:0;color:inherit;'
+      + 'background:rgba(255,255,255,.14) url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 24 24\\'%3E%3Cpath fill=\\'%23fff\\' d=\\'M7 10l5 5 5-5z\\'/%3E%3C/svg%3E") no-repeat right 5px center;'
+      + 'border-radius:7px;font-size:12.5px;line-height:1;padding:6px 24px 6px 10px;cursor:pointer;max-width:130px;height:28px}'
+      + '#docfont-select option{color:#1a1d23;background:#fff}'
+      + '@media screen and (max-width:44.98em){#docfont-wrap{margin:0 6px 0 0}#docfont-select{font-size:11.5px;padding:5px 20px 5px 8px;max-width:104px;height:26px}}';
     document.head.appendChild(css);
-    var b = document.createElement('button');
-    b.id = 'docfont-btn';
-    b.type = 'button';
-    b.setAttribute('aria-label', '切换正文字体');
-    b.addEventListener('click', function () {
-      var ids = MODES.map(function (m) { return m.id; });
-      var i = ids.indexOf(cur());
-      try { localStorage.setItem(KEY, MODES[(i + 1) % MODES.length].id); } catch (e) {}
+    var opts = document.querySelectorAll('.md-header__option');
+    var anchor = opts.length ? opts[opts.length - 1] : document.querySelector('.md-header__inner');
+    if (!anchor) return;
+    var wrap = document.createElement('span');
+    wrap.id = 'docfont-wrap';
+    var sel = document.createElement('select');
+    sel.id = 'docfont-select';
+    sel.setAttribute('aria-label', '正文字体');
+    MODES.forEach(function (m) {
+      var o = document.createElement('option');
+      o.value = m.id; o.textContent = m.name;
+      sel.appendChild(o);
+    });
+    sel.value = cur();
+    sel.addEventListener('change', function () {
+      try { localStorage.setItem(KEY, sel.value); } catch (e) {}
       apply();
     });
-    document.body.appendChild(b);
+    wrap.appendChild(sel);
+    anchor.appendChild(wrap);
   }
   if (window.document$) { window.document$.subscribe(apply); }
   if (document.readyState === 'loading') {
@@ -387,9 +429,13 @@ theme:
     - navigation.footer
     - navigation.top
     - navigation.path
+    - toc.follow
+    - search.suggest
     - search.highlight
     - search.share
     - content.code.copy
+  icon:
+    logo: material/book-open-page-variant
   palette:
     - scheme: default
       primary: indigo
@@ -397,12 +443,20 @@ theme:
     - scheme: slate
       primary: indigo
       toggle: {{icon: material/brightness-4, name: 切换到亮色}}
+extra_css:
+  - css/custom.css
 plugins:
   - search:
       lang: ja
   - section-index
 markdown_extensions:
   - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - toc:
       permalink: true
   - pymdownx.arithmatex:
@@ -438,13 +492,14 @@ def main():
             title = dir_title(d)
             nav.append({title: sub})
             n = len([x for x in d.rglob("*.md")])
-            cards.append(f"| [{title}](./{d.name}/) | {n} 篇 |")
+            icon, desc = CH_META.get(d.name, ("material-book-open-variant", ""))
+            cards.append(f"- :{icon}: **[{title}]({d.name}/)**\n\n    ---\n\n    {n} 篇 · {desc}")
     nav.append({"仓库信息": [
         {"演示与实验索引": "demos.md"},
         {"AGENTS.md": "AGENTS.md"},
         {"CLAUDE.md（写作与提交规范）": "CLAUDE.md"},
     ]})
-    gen_index("\n".join(cards))
+    gen_index("\n\n".join(cards))
 
     print("[4/5] 下载前端依赖（mermaid/mathjax，失败则回退 CDN）…")
     vendored = vendor_js()
