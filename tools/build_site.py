@@ -357,7 +357,7 @@ FONTS_JS = """(function () {
     { id: 'kai', name: '字体：楷体' },
     { id: 'fang', name: '字体：仿宋' },
     { id: 'yahei', name: '字体：雅黑等宽' },
-    { id: 'system', name: '字体：苹方（课程同款）' }
+    { id: 'system', name: '字体：苹方' }
   ];
   var STACK = {
     song: '"Songti SC","STSong","SimSun","Noto Serif SC",serif',
