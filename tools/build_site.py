@@ -343,7 +343,7 @@ theme:
       toggle: {{icon: material/brightness-4, name: 切换到亮色}}
 plugins:
   - search:
-      separator: '[\\s\\-\\.,:;!?()\\[\\]{{}}"/=|]+|([A-Za-z0-9]+)|(\\p{{Han}}+)'
+      lang: ja
   - section-index
 markdown_extensions:
   - admonition
