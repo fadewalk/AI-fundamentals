@@ -239,15 +239,22 @@ def vendor_js():
     js_dir.mkdir(exist_ok=True)
     (js_dir / "mathjax.js").write_text(
         "window.MathJax = {tex: {inlineMath: [['\\\\(', '\\\\)']], displayMath: [['\\\\[', '\\\\]']]}, "
+        "svg: {fontCache: 'global'}, "
         "options: {skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']}};\n",
         encoding="utf-8",
     )
+    (js_dir / "mermaid-init.js").write_text(MERMAID_INIT, encoding="utf-8")
     vendored = ["javascripts/mathjax.js"]  # 配置必须先于 mathjax 主库加载
     for name, url in [
-        ("tex-mml-chtml.js", "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"),
+        ("tex-svg.js", "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"),  # SVG 输出：字形内嵌，无需 woff 字体
+        ("mermaid.min.js", "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"),
+        ("mermaid-init.js", None),
     ]:
         dst = js_dir / name
         try:
+            if url is None:
+                vendored.append("javascripts/" + name)
+                continue
             req = urllib.request.Request(url, headers={"User-Agent": "curl/8"})
             with urllib.request.urlopen(req, timeout=60) as r, open(dst, "wb") as f:
                 shutil.copyfileobj(r, f)
@@ -255,8 +262,58 @@ def vendor_js():
         except Exception as e:  # noqa: BLE001 - 回退到 CDN 直链
             print(f"  [warn] vendor {name} 失败，回退 CDN 直链: {e}")
             vendored.append(url)
+    # mermaid 库本地化后，material 检测到 window.mermaid 已定义即跳过 unpkg 懒加载，
+    # 直接用本地库初始化并渲染（主题自带的初始化含深浅色适配）
     return vendored
 
+
+MERMAID_INIT = """(function () {
+  'use strict';
+  function scheme() {
+    return (document.body.getAttribute('data-md-color-scheme') === 'slate') ? 'dark' : 'neutral';
+  }
+  var booted = false;
+  function renderAll() {
+    if (typeof mermaid === 'undefined') return;
+    if (!booted) {
+      mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: scheme() });
+      booted = true;
+    }
+    var els = document.querySelectorAll('pre.mermaid-src, div.mermaid-src');
+    Array.prototype.forEach.call(els, function (el, i) {
+      if (el.dataset.mermaidDone) return;
+      el.dataset.mermaidDone = '1';
+      var src = el.textContent.replace(/^\\n/, '');
+      var holder = document.createElement('div');
+      holder.className = 'mermaid-render';
+      el.parentNode.replaceChild(holder, el);
+      var id = 'mmd-' + Date.now() + '-' + i;
+      mermaid.render(id, src).then(function (r) {
+        holder.innerHTML = r.svg;
+      }).catch(function () {
+        holder.className = '';
+        var pre = document.createElement('pre');
+        pre.className = 'mermaid-fallback';
+        pre.textContent = src;
+        holder.replaceWith(pre);
+      });
+    });
+  }
+  function boot() {
+    var src = null;
+    for (var i = 0, ss = document.scripts; i < ss.length; i++)
+      if (ss[i].src && /mermaid\.min\.js/.test(ss[i].src)) { src = ss[i].src; break; }
+    if (!src) return;
+    var s = document.createElement('script');
+    s.src = src; // 同一 URL 命中浏览器缓存，不产生第二次下载
+    s.onload = renderAll;
+    document.head.appendChild(s);
+    if (window.document$) window.document$.subscribe(renderAll);
+    else document.addEventListener('DOMContentLoaded', renderAll);
+  }
+  boot();
+})();
+"""
 
 CFG_HEAD = """site_name: AI-Fundamentals · AI 基础设施知识库
 site_url: {site_url}
@@ -297,7 +354,7 @@ markdown_extensions:
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
-          class: mermaid
+          class: mermaid-src
           format: !!python/name:pymdownx.superfences.fence_code_format
 """
 
