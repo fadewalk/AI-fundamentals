@@ -349,13 +349,19 @@ MERMAID_INIT = """(function () {
 
 FONTS_JS = """(function () {
   'use strict';
-  var KEY = 'aivc_docs_font';
-  var MODES = [
+  var FKEY = 'aivc_docs_font', SKEY = 'aivc_docs_size';
+  var FONTS = [
     { id: 'default', name: '字体：默认黑体' },
     { id: 'song', name: '字体：宋体' },
     { id: 'kai', name: '字体：楷体' },
     { id: 'fang', name: '字体：仿宋' },
     { id: 'yahei', name: '字体：雅黑等宽' }
+  ];
+  var SIZES = [
+    { id: 's', name: '大小：较小' },
+    { id: 'm', name: '大小：默认' },
+    { id: 'l', name: '大小：较大' },
+    { id: 'xl', name: '大小：特大' }
   ];
   var STACK = {
     song: '"Songti SC","STSong","SimSun","Noto Serif SC",serif',
@@ -363,47 +369,55 @@ FONTS_JS = """(function () {
     fang: '"Fangti SC","STFangsong","FangSong","Noto Serif SC",serif',
     yahei: '"Microsoft YaHei Mono","Sarasa Mono SC","Microsoft YaHei","PingFang SC",monospace'
   };
-  function cur() { try { return localStorage.getItem(KEY) || 'default'; } catch (e) { return 'default'; } }
+  function get(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
+  function set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function fontId() { var id = get(FKEY, 'default'); return STACK[id] ? id : 'default'; }
+  function sizeId() { var id = get(SKEY, 'm'); return ['s','m','l','xl'].indexOf(id) >= 0 ? id : 'm'; }
   function apply() {
-    var id = cur();
-    if (!STACK[id]) id = 'default';
-    document.documentElement.setAttribute('data-docfont', id);
-    var s = document.getElementById('docfont-select');
-    if (s) s.value = id;
+    document.documentElement.setAttribute('data-docfont', fontId());
+    document.documentElement.setAttribute('data-docsize', sizeId());
+    var f = document.getElementById('docfont-select'); if (f) f.value = fontId();
+    var z = document.getElementById('docsize-select'); if (z) z.value = sizeId();
+  }
+  function mkSelect(id, label, items, isFont) {
+    var sel = document.createElement('select');
+    sel.id = id; sel.setAttribute('aria-label', label);
+    items.forEach(function (it) {
+      var o = document.createElement('option');
+      o.value = it.id; o.textContent = it.name;
+      sel.appendChild(o);
+    });
+    sel.value = isFont ? fontId() : sizeId();
+    sel.addEventListener('change', function () { set(isFont ? FKEY : SKEY, sel.value); apply(); });
+    return sel;
   }
   function inject() {
     var css = document.createElement('style');
     var rules = Object.keys(STACK).map(function (id) {
       return 'html[data-docfont="' + id + '"]{--md-text-font:' + STACK[id] + '!important;--md-text-font-family:' + STACK[id] + '!important}';
     }).join('');
-    css.textContent = rules
-      + '#docfont-wrap{display:inline-flex;align-items:center;margin:0 10px 0 2px;flex-shrink:0}'
-      + '#docfont-select{appearance:none;-webkit-appearance:none;-moz-appearance:none;border:0;outline:0;color:inherit;'
-      + 'background:rgba(255,255,255,.14) url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 24 24\\'%3E%3Cpath fill=\\'%23fff\\' d=\\'M7 10l5 5 5-5z\\'/%3E%3C/svg%3E") no-repeat right 5px center;'
+    var sizes = { s: '.72rem', m: '.8rem', l: '.92rem', xl: '1.05rem' };
+    var sizeRules = Object.keys(sizes).map(function (id) {
+      return 'html[data-docsize="' + id + '"] .md-typeset{font-size:' + sizes[id] + '}';
+    }).join('');
+    css.textContent = rules + sizeRules
+      + '.docfont-wrap{display:inline-flex;align-items:center;margin:0 8px 0 2px;flex-shrink:0}'
+      + '.docfont-wrap select{appearance:none;-webkit-appearance:none;-moz-appearance:none;border:0;outline:0;color:inherit;'
+      + 'background:rgba(255,255,255,.14) url("data:image/svg+xml;charset=utf-8,' + "%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Cpath fill=%22%23fff%22 d=%22M7 10l5 5 5-5z%22/%3E%3C/svg%3E" + '") no-repeat right 5px center;'
       + 'border-radius:7px;font-size:12.5px;line-height:1;padding:6px 24px 6px 10px;cursor:pointer;max-width:130px;height:28px}'
-      + '#docfont-select option{color:#1a1d23;background:#fff}'
-      + '@media screen and (max-width:44.98em){#docfont-wrap{margin:0 6px 0 0}#docfont-select{font-size:11.5px;padding:5px 20px 5px 8px;max-width:104px;height:26px}}';
+      + '.docfont-wrap select option{color:#1a1d23;background:#fff}'
+      + '#docsize-select{max-width:104px;padding:6px 20px 6px 10px}'
+      + '@media screen and (max-width:44.98em){.docfont-wrap{margin:0 6px 0 0}.docfont-wrap select{font-size:11.5px;padding:5px 20px 5px 8px;max-width:104px;height:26px}#docsize-select{max-width:76px;padding:5px 18px 5px 8px}}';
     document.head.appendChild(css);
     var opts = document.querySelectorAll('.md-header__option');
     var anchor = opts.length ? opts[opts.length - 1] : document.querySelector('.md-header__inner');
     if (!anchor) return;
-    var wrap = document.createElement('span');
-    wrap.id = 'docfont-wrap';
-    var sel = document.createElement('select');
-    sel.id = 'docfont-select';
-    sel.setAttribute('aria-label', '正文字体');
-    MODES.forEach(function (m) {
-      var o = document.createElement('option');
-      o.value = m.id; o.textContent = m.name;
-      sel.appendChild(o);
-    });
-    sel.value = cur();
-    sel.addEventListener('change', function () {
-      try { localStorage.setItem(KEY, sel.value); } catch (e) {}
-      apply();
-    });
-    wrap.appendChild(sel);
-    anchor.appendChild(wrap);
+    var w1 = document.createElement('span'); w1.className = 'docfont-wrap';
+    w1.appendChild(mkSelect('docfont-select', '正文字体', FONTS, true));
+    var w2 = document.createElement('span'); w2.className = 'docfont-wrap';
+    w2.appendChild(mkSelect('docsize-select', '正文大小', SIZES, false));
+    anchor.appendChild(w1);
+    anchor.appendChild(w2);
   }
   if (window.document$) { window.document$.subscribe(apply); }
   if (document.readyState === 'loading') {
@@ -420,9 +434,6 @@ site_url: {site_url}
 site_description: 中文 AI 基础设施知识库（硬件/集群/云原生/训练/推理/Agent/RAG）——导航增强镜像
 docs_dir: docs
 use_directory_urls: true
-repo_url: {repo}
-repo_name: ForceInjection/AI-fundamentals
-edit_uri: blob/main/
 theme:
   name: material
   language: zh
