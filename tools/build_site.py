@@ -356,13 +356,15 @@ FONTS_JS = """(function () {
     { id: 'song', name: '字体：宋体' },
     { id: 'kai', name: '字体：楷体' },
     { id: 'fang', name: '字体：仿宋' },
-    { id: 'yahei', name: '字体：雅黑等宽' }
+    { id: 'yahei', name: '字体：雅黑等宽' },
+    { id: 'system', name: '字体：苹方（课程同款）' }
   ];
   var STACK = {
     song: '"Songti SC","STSong","SimSun","Noto Serif SC",serif',
     kai: '"Kaiti SC","STKaiti","KaiTi","Noto Serif SC",serif',
     fang: '"Fangti SC","STFangsong","FangSong","Noto Serif SC",serif',
-    yahei: '"Microsoft YaHei Mono","Sarasa Mono SC","Microsoft YaHei","PingFang SC",monospace'
+    yahei: '"Microsoft YaHei Mono","Sarasa Mono SC","Microsoft YaHei","PingFang SC",monospace',
+    system: 'system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif'
   };
   function get(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
   function set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
