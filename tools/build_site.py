@@ -246,11 +246,13 @@ def vendor_js():
         encoding="utf-8",
     )
     (js_dir / "mermaid-init.js").write_text(MERMAID_INIT, encoding="utf-8")
+    (js_dir / "fonts.js").write_text(FONTS_JS, encoding="utf-8")
     vendored = ["javascripts/mathjax.js"]  # 配置必须先于 mathjax 主库加载
     for name, url in [
         ("tex-svg.js", "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"),  # SVG 输出：字形内嵌，无需 woff 字体
         ("mermaid.min.js", "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"),
         ("mermaid-init.js", None),
+        ("fonts.js", None),
     ]:
         dst = js_dir / name
         try:
@@ -314,6 +316,50 @@ MERMAID_INIT = """(function () {
     else document.addEventListener('DOMContentLoaded', renderAll);
   }
   boot();
+})();
+"""
+
+FONTS_JS = """(function () {
+  'use strict';
+  var KEY = 'aivc_docs_font';
+  var MODES = [
+    { id: 'default', btn: '字A', name: '默认黑体', css: '' },
+    { id: 'song', btn: '宋', name: '宋体（衬线，适合长文阅读）', css: '"Songti SC","STSong","SimSun","Noto Serif SC",serif' },
+    { id: 'kai', btn: '楷', name: '楷体', css: '"Kaiti SC","STKaiti","KaiTi","Noto Serif SC",serif' },
+    { id: 'fang', btn: '仿', name: '仿宋', css: '"Fangti SC","STFangsong","FangSong","Noto Serif SC",serif' }
+  ];
+  function cur() { try { return localStorage.getItem(KEY) || 'default'; } catch (e) { return 'default'; } }
+  function mode() { var ids = MODES.map(function (m) { return m.id; }); var i = ids.indexOf(cur()); return MODES[i < 0 ? 0 : i]; }
+  function apply() {
+    var m = mode();
+    document.documentElement.setAttribute('data-docfont', m.id);
+    var b = document.getElementById('docfont-btn');
+    if (b) { b.textContent = m.btn; b.title = '正文字体：' + m.name + '（点击切换）'; }
+  }
+  function inject() {
+    var css = document.createElement('style');
+    var rules = MODES.filter(function (m) { return m.css; }).map(function (m) {
+      return 'html[data-docfont="' + m.id + '"]{--md-text-font:' + m.css + '!important;--md-text-font-family:' + m.css + '!important}';
+    }).join('');
+    css.textContent = rules + '#docfont-btn{font-size:12px;border:0;background:transparent;color:inherit;cursor:pointer;padding:0 .3rem;line-height:1.2;opacity:.85}#docfont-btn:hover{opacity:1}';
+    document.head.appendChild(css);
+    var anchor = document.querySelector('.md-header__option') || document.querySelector('.md-header__inner');
+    if (!anchor) return;
+    var b = document.createElement('button');
+    b.id = 'docfont-btn';
+    b.type = 'button';
+    b.addEventListener('click', function () {
+      var ids = MODES.map(function (m) { return m.id; });
+      var i = ids.indexOf(cur());
+      try { localStorage.setItem(KEY, MODES[(i + 1) % MODES.length].id); } catch (e) {}
+      apply();
+    });
+    anchor.insertBefore(b, anchor.firstChild);
+  }
+  if (window.document$) { window.document$.subscribe(apply); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject);
+  else inject();
+  apply();
 })();
 """
 
