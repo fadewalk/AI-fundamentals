@@ -1,0 +1,39 @@
+name: Sync upstream and redeploy
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'  # 每周一 10:00 北京时间
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with token for push)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Merge upstream/main
+        run: |
+          git config user.name  "sync-bot"
+          git config user.email "actions@github.com"
+          git remote add upstream https://github.com/ForceInjection/AI-fundamentals.git
+          git fetch upstream main
+          BEFORE=$(git rev-parse HEAD)
+          if ! git merge --no-edit upstream/main; then
+            echo "::error::合并冲突——上游改动了本站工具文件（tools/ 或 .github/），需手动处理"
+            git merge --abort
+            exit 1
+          fi
+          AFTER=$(git rev-parse HEAD)
+          if [ "$BEFORE" = "$AFTER" ]; then
+            echo "上游无新提交，本次为 no-op"
+          else
+            echo "同步到上游 $(git rev-parse --short upstream/main)，推送并触发重新部署"
+            git push origin main
+          fi
