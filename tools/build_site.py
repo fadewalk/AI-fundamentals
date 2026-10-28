@@ -334,32 +334,40 @@ FONTS_JS = """(function () {
     var m = mode();
     document.documentElement.setAttribute('data-docfont', m.id);
     var b = document.getElementById('docfont-btn');
-    if (b) { b.textContent = m.btn; b.title = '正文字体：' + m.name + '（点击切换）'; }
+    if (b) { b.innerHTML = '<span class="lbl">字体</span><span>' + m.btn + '</span>'; b.title = '正文字体：' + m.name + '（点击切换）'; }
   }
   function inject() {
     var css = document.createElement('style');
     var rules = MODES.filter(function (m) { return m.css; }).map(function (m) {
       return 'html[data-docfont="' + m.id + '"]{--md-text-font:' + m.css + '!important;--md-text-font-family:' + m.css + '!important}';
     }).join('');
-    css.textContent = rules + '#docfont-btn{font-size:12px;border:0;background:transparent;color:inherit;cursor:pointer;padding:0 .3rem;line-height:1.2;opacity:.85}#docfont-btn:hover{opacity:1}';
+    css.textContent = rules + ''
+      + '#docfont-btn{position:fixed;right:.9rem;bottom:4.6rem;z-index:6;display:inline-flex;align-items:center;gap:5px;'
+      + 'font-size:13px;font-weight:600;line-height:1;padding:9px 12px;border:0;border-radius:999px;'
+      + 'background:var(--md-primary-fg-color,#2563eb);color:var(--md-primary-bg-color,#fff);cursor:pointer;'
+      + 'box-shadow:0 2px 8px rgba(0,0,0,.25);opacity:.92;transition:opacity .2s,transform .2s}'
+      + '#docfont-btn:hover{opacity:1;transform:translateY(-1px)}'
+      + '#docfont-btn .lbl{font-weight:400;font-size:11px;opacity:.8}';
     document.head.appendChild(css);
-    var anchor = document.querySelector('.md-header__option') || document.querySelector('.md-header__inner');
-    if (!anchor) return;
     var b = document.createElement('button');
     b.id = 'docfont-btn';
     b.type = 'button';
+    b.setAttribute('aria-label', '切换正文字体');
     b.addEventListener('click', function () {
       var ids = MODES.map(function (m) { return m.id; });
       var i = ids.indexOf(cur());
       try { localStorage.setItem(KEY, MODES[(i + 1) % MODES.length].id); } catch (e) {}
       apply();
     });
-    anchor.insertBefore(b, anchor.firstChild);
+    document.body.appendChild(b);
   }
   if (window.document$) { window.document$.subscribe(apply); }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject);
-  else inject();
-  apply();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { inject(); apply(); });
+  } else {
+    inject();
+    apply();
+  }
 })();
 """
 
