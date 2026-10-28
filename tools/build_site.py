@@ -392,7 +392,7 @@ FONTS_JS = """(function () {
       sizeRules += 'html[data-docsize="' + p + '"] .md-typeset{font-size:' + (BASE * p / 100).toFixed(3) + 'rem}';
     }
     css.textContent = fontRules + sizeRules
-      + '.docfont-wrap{display:inline-flex;align-items:center;margin:0 8px 0 2px;flex-shrink:0}'
+      + '.docfont-wrap{display:inline-flex;align-items:center;align-self:center;height:28px;margin:0 8px 0 2px;flex-shrink:0}'
       + '.docfont-wrap select{appearance:none;-webkit-appearance:none;-moz-appearance:none;border:0;outline:0;color:inherit;'
       + 'background:rgba(255,255,255,.14) url("data:image/svg+xml;charset=utf-8,' + "%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Cpath fill=%22%23fff%22 d=%22M7 10l5 5 5-5z%22/%3E%3C/svg%3E" + '") no-repeat right 5px center;'
       + 'border-radius:7px;font-size:12.5px;line-height:1;padding:6px 24px 6px 10px;cursor:pointer;max-width:130px;height:28px}'
@@ -401,7 +401,7 @@ FONTS_JS = """(function () {
       + '#docsize-wrap button{border:0;background:transparent;color:inherit;cursor:pointer;font-size:15px;line-height:1;width:26px;height:100%;padding:0;opacity:.9}'
       + '#docsize-wrap button:hover{opacity:1}'
       + '#docsize-val{font-size:12px;line-height:1;min-width:38px;text-align:center}'
-      + '@media screen and (max-width:44.98em){.docfont-wrap{margin:0 6px 0 0}.docfont-wrap select{font-size:11.5px;padding:5px 20px 5px 8px;max-width:104px;height:26px}#docsize-wrap{height:26px;margin:0 6px 0 0}#docsize-val{min-width:32px;font-size:11px}}';
+      + '@media screen and (max-width:44.98em){.docfont-wrap{margin:0 6px 0 0;height:26px}.docfont-wrap select{font-size:11.5px;padding:5px 20px 5px 8px;max-width:104px;height:26px}#docsize-wrap{height:26px;margin:0 6px 0 0}#docsize-val{min-width:32px;font-size:11px}}';
     document.head.appendChild(css);
     var opts = document.querySelectorAll('.md-header__option');
     var anchor = opts.length ? opts[opts.length - 1] : document.querySelector('.md-header__inner');
