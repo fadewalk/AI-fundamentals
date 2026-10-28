@@ -142,16 +142,18 @@ def rewrite_links():
 
 
 def dir_title(d: pathlib.Path) -> str:
-    rd = d.relative_to(ROOT)
+    """目录标题：优先 README 的 H1，带目录的数字前缀作章节序号（01 · xxx）。"""
+    name = d.name  # 只看自身目录名——嵌套子目录不该继承顶级章节的序号
+    m = re.match(r"^(\d+)[_-]?(.+)$", name)
+    num = m.group(1) if m else None
+    pretty = (m.group(2) if m else name).replace("_", " ").strip()
     readme = d / "README.md"
     if readme.exists():
         h = first_h1(readme)
         if h and h.lower() != "readme":
-            return h
-    name = rd.as_posix()
-    m = re.match(r"^(\d+)[_-]?(.+)$", name)
-    pretty = (m.group(2) if m else name).replace("_", " ").strip()
-    return pretty or name
+            pretty = h
+    title = pretty or name
+    return f"{num} · {title}" if num else title
 
 
 def file_title(md: pathlib.Path) -> str:
@@ -192,7 +194,7 @@ def nav_tree(base: pathlib.Path, rel_prefix=""):
     if readme.exists():
         has_own_index = any((base / x).exists() for x in ("index.html", "index.md"))
         target = rel_prefix + ("readme-doc.md" if has_own_index else "README.md")
-        items.insert(0, {dir_title(base) + " · 章节导读": target})
+        items.insert(0, {"章节导读": target})
     return items
 
 
