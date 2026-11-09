@@ -98,6 +98,8 @@ dense 模型没有区段 ①，它每生成一个 token 都要把全量权重过
 
 幻灯片给这三张图的注解是：Same cost. More capacity. Less bandwidth.
 
+> 注：All-HBF 一格按 4,096 GB ÷ 8 die 折算是 512 GB/die，而规范与 tape-out 报道口径的单 die 容量为 256 GB——两处读数对不上，系幻灯片口径差异，本文按幻灯片原数 4,096 GB 计算。
+
 ### 5.1 短上下文：赢在成本，代价是 85% 死容量
 
 256 进 / 256 出，Kimi-K2 权重约 538–615 GB，随 batch 从 8 涨到 128：
@@ -191,7 +193,7 @@ MoE 越稀疏，缓存越晚才划算。只要 batch 上到几十，DeepSeek-V3 
 | attention + 其它固定权重     | 110 GB      | 7%       | HBM（计算密集、频繁访问）     |
 | 单条 1M 序列的 KV Cache      | 30 GB       | —        | HBF（卸载池 + 前缀缓存）      |
 
-93% 的字节是只写一次、冷态读取的专家权重，这个生命周期特征确实和闪存对得上。剩下的 7% 计算密集、访问频繁，留在 HBM。
+93% 的字节是只写一次、冷态读取的专家权重，这个生命周期特征确实和闪存对得上。剩下的 7% 计算密集、访问频繁，留在 HBM。（「单条 1M 序列 KV 30 GB」是幻灯片读数；按本仓 [B300 部署篇](deployment/b300-deployment-and-kv-cache.md) §3.3 的逐层口径，K3 的 MLA KV 为 FP8 13,824 B/token，1M 序列约 13.8 GB——两者相差约 2 倍，幻灯片未注明其层数/精度假设，本文保留幻灯片原数。）
 
 第 18 页给出了改造后的 vLLM 内存子系统（文字还原）：HBM 侧是 Model Weights (resident)、Paged KV Cache、Activations 和 Router MoE 权重；HBF 侧用红色虚线框标出，包含 Paged KV Offload Pool、Prefix KV-Cache 和 1.45 TB 的 MoE Experts Pool，框上注明 _instead of host CPU pinned-memory_；左侧另有两块外部存储，SSD-resident KV 与 Scale-out RDMA Remote KV Pools。
 
@@ -239,9 +241,9 @@ $$
 
 $\varphi$ 是每步真正读的比例，$\varphi^*$ 是介质能承受的比例上限。当 $\varphi$ 远小于 $\varphi^*$ 时，整份 KV 可以便宜地摊在 HBF 上，每步只把 top-k 那一两千行捞出来。报告把这条标成「A genuine HBF fit」，但加了一个前提条件：只在稀疏注意力模型上成立，点名的是 DSA（DeepSeek Sparse Attention）、CSA（Compressed Sparse Attention）与 Kimi-Linear。
 
-这条和我们仓库里已经写过的东西正好接上。[当百万 Token KV Cache 从 250GB 降到 5GB](kv_compression/01-post-kv-cache-era.md) 讲的是算法侧把每步要读的字节砍掉一个数量级，[把 KV Cache 压缩推到极限](kv_compression/02-deepseek-v41-flash.md) 讲的是压缩比再往下推。算法把 $b$ 压下去，硬件才有空间把介质换成便宜的。所以 HBF 能不能成立，取决于模型架构愿不愿意继续把稀疏度做上去。
+这条和我们仓库里已经写过的东西正好接上。[当百万 Token KV Cache 从 250GB 降到 5GB](kv_cache/07_kv_compression/05-post-kv-cache-era.md) 讲的是算法侧把每步要读的字节砍掉一个数量级，[把 KV Cache 压缩推到极限](kv_cache/07_kv_compression/06-deepseek-v41-flash.md) 讲的是压缩比再往下推。算法把 $b$ 压下去，硬件才有空间把介质换成便宜的。所以 HBF 能不能成立，取决于模型架构愿不愿意继续把稀疏度做上去。
 
-顺带一提，稀疏注意力的读取模式和 HBF 的偏好是冲突的。top-k 是散读，而闪存喜欢顺序大块。这个矛盾在我们的 [稀疏注意力 × KV Cache Offloading](kv_cache/01_concepts/offloading/sparse_attention_driven_offloading_problems.md) 里已经从卸载角度枚举过八类问题，换成 HBF 只会更尖锐。
+顺带一提，稀疏注意力的读取模式和 HBF 的偏好是冲突的。top-k 是散读，而闪存喜欢顺序大块。这个矛盾在我们的 [稀疏注意力 × KV Cache Offloading](kv_cache/01_concepts/07_offloading/04_sparse_attention_driven_offloading_problems.md) 里已经从卸载角度枚举过八类问题，换成 HBF 只会更尖锐。
 
 ### 9.2 EP × HBF：用容量买回通信
 

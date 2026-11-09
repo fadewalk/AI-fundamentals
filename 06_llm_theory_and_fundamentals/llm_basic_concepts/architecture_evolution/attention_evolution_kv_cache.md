@@ -4,7 +4,7 @@
 >
 > **口径说明**：文中「每 token KV」均按训练精度 2 字节/元素（fp16/bf16）计算，公式随各节给出；2026 年模型的池结构数字为 config + 池代码公式推算，未跑引擎实测。GPT-3 精度论文未声明（按 2 字节假设），单独标注。
 >
-> 相关文章：[七张图讲透 KV Cache](kv_cache_seven_charts.md)——本文的图解传播版；[注意力算力账](attention_compute_fifteen_charts.md)——计算侧演进的十五张图；[GPT-2 到 Kimi K3 的注意力机制演进](from_gpt2_to_kimi_k3_attention_evolution.md)——同一时间线上注意力**计算侧**的演进，本文专注**存储侧**的那笔账；[KV 压缩推到极限三部曲](../../../09_inference_system/kv_compression/README.md)——2026 年序列压缩路线的深挖。
+> 相关文章：[七张图讲透 KV Cache](kv_cache_seven_charts.md)——本文的图解传播版；[注意力算力账](attention_compute_fifteen_charts.md)——计算侧演进的十五张图；[GPT-2 到 Kimi K3 的注意力机制演进](from_gpt2_to_kimi_k3_attention_evolution.md)——同一时间线上注意力**计算侧**的演进，本文专注**存储侧**的那笔账；[KV 压缩推到极限三部曲](../../../09_inference_system/kv_cache/07_kv_compression/README.md)——2026 年序列压缩路线的深挖。
 
 ---
 
@@ -122,7 +122,7 @@ V2 论文 Table 1 的 caption 给出了换算：按 d_c = 4·d_h、d_h^R = d_h/2
 | 模型                | 结构                                          | 全局层每 token KV             | 滑窗层固定开销                              | 出处                                             |
 | ------------------- | --------------------------------------------- | ----------------------------- | ------------------------------------------- | ------------------------------------------------ |
 | Mistral 7B          | 全层 SWA 4096                                 | 128 KiB（窗口内）             | 长文总占用封顶 ≈512 MiB                     | config `sliding_window: 4096`                    |
-| Gemma-3 27B（2025） | 62 层 = **52 滑窗（1024）+ 10 全局**          | 10 层 × 80 KiB = 80 KiB/token | 滑窗层 52 × 1024 × 8 KiB ≈ **416 MiB** 固定 | unsloth 镜像 config + transformers 源码推导      |
+| Gemma-3 27B（2025） | 62 层 = **52 滑窗（1024）+ 10 全局**          | 每全局层 8 KiB（2×16 KV 头×128 维×2 字节）× 10 层 = **80 KiB/token** | 滑窗层 52 × 1024 × 8 KiB ≈ **416 MiB** 固定 | unsloth 镜像 config + transformers 源码推导      |
 | gpt-oss 20B（2025） | 24 层 = **12 滑窗（128）+ 12 全局**，1:1 交替 | 12 层 × 2 KiB = 24 KiB/token  | 滑窗层合计仅 **3 MiB**                      | openai/gpt-oss-20b config `layer_types` 逐层清单 |
 
 三个说明。第一，Gemma-3 的模式是「每 6 层 1 个全局」（`(i+1) % 6 == 0`），62 层落在 5.2:1 而不是整数 5:1；gpt-oss 则是严格的隔层交替。第二，滑窗层的开销是**常数**：gpt-oss 的窗口只有 128（且按 HF 实现含当前 token，即只看 127 个前文），12 个滑窗层合计 3 MiB，长上下文下可以忽略；账全部压在少数全局层上，于是全局层的 KV 头数可以给得很省（8 头 × 64 维）。第三，代价是**窗口外彻底丢失**——这不是压缩是丢弃，长文档问答里「看过但想不起」的错误多数来自这里。
@@ -255,7 +255,7 @@ V1 389,120 B → V3.2 48,068 B → V4-Flash 3,514 B → V4.1 890 B
 
 模型侧每省一段账，引擎侧就多一类问题。这条因果链在 2026 年的三条路线上各留了一处印记：
 
-1. 池的异构化。序列压缩把「一个 token 一段连续 KV」打碎成七个池（V4）、八个池（V4.1），其中混着不是 KV 的 indexer 与压缩器状态。前缀缓存的命中判定、备份粒度、逐出策略都要按池重写（SGLang HiCache 的应对见[分层缓存一篇](../../../09_inference_system/kv_compression/03-multilevel-cache.md)）。
+1. 池的异构化。序列压缩把「一个 token 一段连续 KV」打碎成七个池（V4）、八个池（V4.1），其中混着不是 KV 的 indexer 与压缩器状态。前缀缓存的命中判定、备份粒度、逐出策略都要按池重写（SGLang HiCache 的应对见[分层缓存一篇](../../../09_inference_system/kv_cache/07_kv_compression/07-multilevel-cache.md)）。
 2. 命中判定的多边界化。滑窗与压缩并存后，Full 可复用的范围与 SWA 可复用的范围出现差值，前缀缓存第一次要维护两个边界——SGLang 的 SWA 分叉点缓存（v0.5.20，命中率 43.8%→60.8%，官方口径）正是为这个缺口而生（源码解析见[分叉点缓存一篇](../../../09_inference_system/sglang/sglang-swa-branching-point-cache.md)）。
 3. 并发上限的迁移。线性混合路线的状态按请求计费，GLM-5.3-Flash 官方文档明确「KDA 状态池会先于 KV 池限制并发」——容量规划的公式从「上下文 × 每 token KV」变成两条公式取小。
 
@@ -288,7 +288,7 @@ V1 389,120 B → V3.2 48,068 B → V4-Flash 3,514 B → V4.1 890 B
 - Falcon：`tiiuae/falcon-7b` config `multi_query: true`（40B config 无此字段，HF FalconConfig 默认值为 true，即同样 MQA）
 - DeepSeek-V2：arXiv:2405.04434（§2.1.1/2.1.3 MLA 缓存式；Table 1 及 caption）
 - DeepSeek-V3：arXiv:2412.19437（§2.1.1）
-- DeepSeek-V4 / V4.1-Flash：arXiv:2606.19348 及 V4.1 报告（config 双向核对见[本地 02 篇](../../../09_inference_system/kv_compression/02-deepseek-v41-flash.md)）
+- DeepSeek-V4 / V4.1-Flash：arXiv:2606.19348 及 V4.1 报告（config 双向核对见[本地 02 篇](../../../09_inference_system/kv_cache/07_kv_compression/06-deepseek-v41-flash.md)）
 - Kimi K3：arXiv:2607.24653
 - GLM-5 系：arXiv:2602.15763；SGLang cookbook `GLM-5.3.mdx`、`GLM-5.3-Flash.mdx`、`Qwen3.8-Flash-Next.mdx`
 
@@ -304,5 +304,5 @@ V1 389,120 B → V3.2 48,068 B → V4-Flash 3,514 B → V4.1 890 B
 ### 本地关联文章
 
 - [GPT-2 到 Kimi K3 的注意力机制演进](from_gpt2_to_kimi_k3_attention_evolution.md)——计算侧同时间线
-- [KV 压缩推到极限三部曲](../../../09_inference_system/kv_compression/README.md)——序列压缩路线的深挖（V4/V4.1 七池八池、多级缓存）
+- [KV 压缩推到极限三部曲](../../../09_inference_system/kv_cache/07_kv_compression/README.md)——序列压缩路线的深挖（V4/V4.1 七池八池、多级缓存）
 - [SGLang 分叉点缓存源码解析](../../../09_inference_system/sglang/sglang-swa-branching-point-cache.md)——滑窗与压缩并存后，引擎侧的命中判定改造

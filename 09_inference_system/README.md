@@ -1,12 +1,12 @@
 # 推理系统技术体系
 
-一个 70B 模型在 H100 上跑 128K 上下文的推理——KV Cache 吃掉 320 GB 显存，attention kernel 的 GPU 利用率不到 25%，Prefill 的一次长 prompt 能把 Decode 阻塞数秒。**推理系统优化的本质，就是解决这三个数字背后的核心矛盾：显存不够、算力空转、延迟抖动。**
+一个 70B 模型在 H100 上跑 128K 上下文的推理——KV Cache 大约要吃掉 42 GB 显存（GQA-8 口径；若为 MHA-64 头则约 320 GB），attention kernel 的 GPU 利用率不到 25%，Prefill 的一次长 prompt 能把 Decode 阻塞数秒。**推理系统优化的本质，就是解决这三个数字背后的核心矛盾：显存不够、算力空转、延迟抖动。**
 
-本目录从底层机制到上层系统，覆盖 LLM 推理优化的完整纵深。建议按 §1→§6 顺序阅读——每章建立在前一章的基础之上，最后以成本分析和工程实践收尾。
+本目录从底层机制到上层系统，覆盖 LLM 推理优化的完整纵深。建议按 §1→§7 顺序阅读——每章建立在前一章的基础之上，最后以成本分析和工程实践收尾。
 
 ---
 
-> **KV 压缩推到极限**：DeepSeek-V4 与 Kimi K3 从架构层面重写了 attention，1M 上下文下 KV 从 250GB 量级降到个位数 GB，旧叙事随之作废；一个月后 V4.1-Flash 又把全局 KV 压到 V4-Flash 的 1/4，并推翻前篇三处判断。但压缩只是把问题换了位置：单层的绝对量小到极点之后，杠杆从「每层压多少」转向「几层共用一份」，而一个 token 的状态不再是连续张量，变成了一组异构池，其中还混着不是 KV 的压缩器状态。系列入口：**[KV 压缩推到极限：从架构改造到分层缓存](kv_compression/README.md)**（体积账 → 报告精读 → 分层缓存三篇深挖；核对口径各不相同：源码验证、报告章节与 `config.json` 对照、`文件:行号` 逐条复验）。
+> **KV 压缩推到极限**：DeepSeek-V4 与 Kimi K3 从架构层面重写了 attention，1M 上下文下 KV 从 250GB 量级降到个位数 GB，旧叙事随之作废；一个月后 V4.1-Flash 又把全局 KV 压到 V4-Flash 的 1/4，并推翻前篇三处判断。但压缩只是把问题换了位置：单层的绝对量小到极点之后，杠杆从「每层压多少」转向「几层共用一份」，而一个 token 的状态不再是连续张量，变成了一组异构池，其中还混着不是 KV 的压缩器状态。系列入口：**[KV 压缩推到极限：从架构改造到分层缓存](kv_cache/07_kv_compression/README.md)**（体积账 → 报告精读 → 分层缓存三篇深挖；核对口径各不相同：源码验证、报告章节与 `config.json` 对照、`文件:行号` 逐条复验）。
 >
 > **新负载**：Agent 流量正在取代 Chat 成为主要负载——KV 生命周期错配、调度语义失真、会话粘性、容量公式失效四个连锁问题，以及两引擎源码级现状与「保留 vs 重算」的系数变化。系列入口：**[Agent 推理服务](agent_serving/README.md)**（vLLM `43d691ec6b` / SGLang `f7101b0ae6` 源码验证）。
 >
@@ -26,7 +26,7 @@
 
 在讨论任何优化之前，先理解推理的两阶段（Prefill/Decode）、KV Cache 为什么存在、以及并行策略如何把大模型塞进多张 GPU。
 
-- **[KV Cache 技术体系](kv_cache/README.md)** — 从 KV Cache 基础到分布式管理的完整导航；含五个专题精读：FAST'26「KV Cache × 存储」（五场景）、内存层级（四种内存账）、安全（三种泄露面）、复用（两条扩展路径）、压缩（三种二次决策）。
+- **[KV Cache 技术体系](kv_cache/README.md)** — 从 KV Cache 基础到分布式管理的完整导航；含五个专题精读：FAST'26「KV Cache × 存储」（五场景）、内存层级（四种内存账）、安全（三种泄露面）、复用（两条扩展路径）、压缩（三种二次决策）；另有实践方法论一篇——真机排查总结的性能分析框架（[TTFT 多了 15 毫秒之后](kv_cache/08_methodology/01_kv-cache-perf-methodology.md)）。
   - 基础：KV Cache 原理、PagedAttention、五种注意力存储格式
   - 优化：Prefix Caching、跨模型复用、压缩量化、淘汰策略、Chunked Prefill、PD 分离传输、Prefetching、CUDA Graph
   - 系统：LMCache、Mooncake、KVBM、HiCache、Tair KVCache
@@ -86,7 +86,7 @@
 - **[DFlash 2 块扩散投机解码](model_optimization/dflash-block-diffusion-speculative-decoding.md)** — 用块扩散把草稿生成也并行化（mask 占位 + 一次前向整块预测），路径选择器与局部卷积补齐 DFlash 1 的选择余量与块尾衰减缺口，四引擎内置、Blackwell 最高 15× 吞吐。
 - **[DLite 无历史投机解码](model_optimization/dlite-history-free-speculative-decoding.md)** — 把历史建模留给 target，draft 只消费 target hidden states 做局部预测；Agent 负载下 2.07–2.74× 加速，含两阶段训练、消融与工程边界。
 - **[NVIDIA 模型优化器](model_optimization/nvidia_model_optimizer.md)** — 工具链详解与优化实践。
-- 相关：KV Cache 层面的压缩与量化见 §1 中 [KV Cache 技术体系](kv_cache/README.md) 的压缩章节与 [KV Cache 量化深度解析](kv_cache/01_concepts/compression/kv_cache_quantization.md)。
+- 相关：KV Cache 层面的压缩与量化见 §1 中 [KV Cache 技术体系](kv_cache/README.md) 的压缩章节与 [KV Cache 量化深度解析](kv_cache/01_concepts/06_compression/02_kv_cache_quantization.md)。
 
 ---
 
@@ -116,6 +116,7 @@
 - **[推理成本分析](cost_analysis/README.md)** — 成本测算框架总览与按用户画像的口径选择指南。
 - **[API 定价分析](cost_analysis/llm_api_pricing_analysis.md)** — 基于 OpenRouter 的多模型成本测算，配套 [抓取脚本](cost_analysis/fetch_pricing.py)。
 - **[Coding Plan 对比](cost_analysis/coding_plan/coding_plan_report.md)** — 11 款 AI 编程工具订阅成本与隐藏条款解析。
+- **[Coding Plan 定价总表](cost_analysis/coding_plan/data/pricing_table.md)** — 各家套餐月费、额度、限制条款与官方来源链接的结构化数据表（2026-04 采集口径）。
 - **[DeepSeek 推理集群单卡经济学](cost_analysis/deepseek_inference_cluster_unit_economics.md)** — 用官方生产参数反推单卡账本：155 万亿 tokens/天、96% 缓存命中、38 美元/卡时，单卡年收入 33 万美元、93–96% 运营利润率，附价格/成本假设与敏感性。
 
 ---

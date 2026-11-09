@@ -6,7 +6,7 @@
 
 本文覆盖推理量化的四个基础问题：**FP8 格式本身怎么设计（E4M3 vs E5M2）**、**量化的粒度如何影响精度（per-tensor/per-token/per-group）**、**权重量化和 KV Cache 量化为何难度不同**、以及**三种主流权重量化算法各自怎么解决精度问题（SmoothQuant/AWQ/GPTQ）**。
 
-> 已有专文覆盖 KV Cache 量化的工程实现（[KV Cache 量化深度解析](../kv_cache/01_concepts/compression/kv_cache_quantization.md)），本文聚焦于**通用量化原理和权重量化算法**，仅在与权重量化做对比时涉及 KV Cache。
+> 已有专文覆盖 KV Cache 量化的工程实现（[KV Cache 量化深度解析](../kv_cache/01_concepts/06_compression/02_kv_cache_quantization.md)），本文聚焦于**通用量化原理和权重量化算法**，仅在与权重量化做对比时涉及 KV Cache。
 
 ---
 
@@ -72,7 +72,7 @@ E4M3 的动态范围（最大 448）远小于 FP16（最大 65504）和 BF16（�
 | **激活**     | FP8      | 高   | 动态变化、分布随输入漂移；outlier 值常见（LLaMA 类模型）        |
 | **KV Cache** | FP8/INT8 | 中高 | 类似激活但长期累积；量化误差经过 SoftMax 指数放大               |
 
-这三种量化的难度差异源于一个根本原因：**SoftMax 的指数放大效应**。权重量化误差在多层 forward 平摊，KV Cache 量化误差直接在 attention 的指数核内放大。已有文章（[KV Cache 量化深度解析](../kv_cache/01_concepts/compression/kv_cache_quantization.md)）详细拆解了 KV Cache 量化的 per-tensor/per-token-head 模式，这里不再重复。
+这三种量化的难度差异源于一个根本原因：**SoftMax 的指数放大效应**。权重量化误差在多层 forward 平摊，KV Cache 量化误差直接在 attention 的指数核内放大。已有文章（[KV Cache 量化深度解析](../kv_cache/01_concepts/06_compression/02_kv_cache_quantization.md)）详细拆解了 KV Cache 量化的 per-tensor/per-token-head 模式，这里不再重复。
 
 ---
 
@@ -87,8 +87,8 @@ SmoothQuant（Xiao et al., 2023）的核心洞察：activation 的 outlier 是�
 算法的做法：在 forward 前，对每个通道 j 计算一个平滑因子 `s_j = max(|X_j|)^α / max(|W_j|)^(1-α)`（α 是迁移强度，通常 0.5），然后将 `X_j` 除以 `s_j`，`W_j` 乘以 `s_j`——保证数学等价（`W_j·X_j` = `(W_j·s_j)·(X_j/s_j)` 不变），同时将量化难度从 outlier 多的激活通道转移到分布更均匀的权重通道。
 
 ```text
-变换前: Y = W · X           ← W 有 outlier 通道，精度损失大
-变换后: Y = (W / s) · (X · s)  ← 数学完全等价，但 W/s 分布均匀，X·s 范围稍大
+变换前: Y = W · X           ← X 有 outlier 通道，激活量化精度损失大
+变换后: Y = (W · s) · (X / s)  ← 数学完全等价，X/s 平滑 outlier，量化难度转移到权重侧
 ```
 
 效果：per-tensor INT8 量化权重和激活，精度接近 FP16。这是当前 vLLM、TensorRT-LLM 等框架中 **W8A8 量化的理论基础**。
@@ -143,5 +143,5 @@ GPTQ 的简化：OBQ 的复杂度是 O(d⁴)（d 为权重矩阵大小），无�
 - [SmoothQuant: Accurate and Efficient Post-Training Quantization for LLMs](https://arxiv.org/abs/2211.10438) (Xiao et al., 2023)
 - [AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration](https://arxiv.org/abs/2306.00978) (Lin et al., 2023)
 - [GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers](https://arxiv.org/abs/2210.17323) (Frantar et al., 2023)
-- [KV Cache 量化深度解析](../kv_cache/01_concepts/compression/kv_cache_quantization.md) — per-tensor/per-token-head 模式与 vLLM 实现
+- [KV Cache 量化深度解析](../kv_cache/01_concepts/06_compression/02_kv_cache_quantization.md) — per-tensor/per-token-head 模式与 vLLM 实现
 - [NVIDIA Model Optimizer 技术详解](nvidia_model_optimizer.md) — 量化工具链
