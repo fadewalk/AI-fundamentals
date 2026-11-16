@@ -56,6 +56,8 @@
 - **NCCL 分布式通信测试**
   - [理论基础：NCCL 教程](./03_ai_cluster_ops/03_nccl/01_nccl_theory.md)
   - [实战指南：基准测试与多节点部署](./03_ai_cluster_ops/03_nccl/README.md)
+- **GPUDirect Async**
+  - [GPUDirect Async 深拆：把通信的控制权从 CPU 手里拿回来](./03_ai_cluster_ops/06_gpudirect_async/01_gpudirect-async-deep-dive.md) - 控制面十年演进：GDA → IBGDA → GDAKI 三代机制、NCCL 2.28 GIN 双后端、mKernel 持久内核三路重叠与控制路径三路线对比
 
 ---
 
@@ -150,6 +152,12 @@
 **Kernel 编译器与 Megakernel**：
 
 - [launch、occupancy、overlap：什么时候手写 kernel，什么时候交给编译器](./02_gpu_programming/05_compiler/01_kernel-compiler-megakernel.md)：TVM（schedule 分离）、Mirage（三层联合超优）、MPK（整模型 megakernel）三级递进，配三 regime 决策轴与 launch-bound 微基准
+
+**量化 GEMM 算子**：
+
+- [Marlin 深拆](./02_gpu_programming/06_quant_gemm/01_marlin-deep-dive.md)：W4A16 反量化三笔税与三个设计（repack 布局/lop3 位技巧/双缓冲流水），配套 numpy CPU 语义复现
+- [Humming 深拆](./02_gpu_programming/06_quant_gemm/02_humming-arch-jit.md)：蚂蚁 + vLLM 社区 JIT kernel 库，500 KB wheel 的按需编译链路与 SASS 位补丁解锁隐藏格式
+- [UMMA 深拆](./02_gpu_programming/06_quant_gemm/03_umma-deep-dive.md)：tcgen05 时代 kernel 内部，五类线程分工与 TMEM 中央舞台，反量化结果直写操作数地盘
 
 **性能分析与调优**：
 
@@ -386,26 +394,31 @@ SFT 之后把推理能力推上去要靠 RL，而 RL 的 rollout 由推理引擎
 剖析现代推理系统的底层架构创新，重点解构 Mooncake 等以 KV Cache 为中心的高效 LLM 调度系统设计模式与性能调优策略。
 
 - [手搓 KV Cache：从静态预留到 PagedAttention 的页表](09_inference_system/kv_cache/01_concepts/01_basic/03_hand_roll_kv_cache.md) - 可运行模拟器实测三种显存管理策略：碎片入住失败与 5 倍容量的数字来源。
-- [手搓 MLA：从 MHA 到 weight absorption](09_inference_system/kv_cache/01_concepts/01_basic/07_hand_roll_mla.md) - 四版注意力递进 + 真实权重验证吸收等价（fp32 逐位一致），KV 压缩三口径辨析。
+- [手搓 MLA：从 MHA 到 weight absorption](09_inference_system/kv_cache/01_concepts/01_basic/07_hand_roll_mla.md) - 四种注意力变体递进 + 真实权重验证吸收等价（fp32 逐位一致），KV 压缩三口径辨析。
 - [手搓系列导航](hand_roll_series.md) - 手搓系列 5 篇的阅读顺序与实测产出汇总。
 - [Mooncake 架构详解：以 KV Cache 为中心的高效 LLM 推理系统设计](09_inference_system/kv_cache/02_systems/04_mooncake/01_mooncake_architecture.md) - 新一代推理系统的架构创新与性能优化策略
 - [当 KV Cache 装不进内存：FAST'26 五篇论文给出的五个不同答案](09_inference_system/kv_cache/03_fast26/01_fast26-kv-storage-five-scenarios.md) - FAST'26「AI and LLMs」九篇论文中五篇精读的五象限汇总：端侧/智能体/对话/数据中心/冷启动各自的核心矛盾、招式与数字，共同支点是可复现的 I/O 特征；附 4 篇 Agent 精读报告
 - [当 KV 装不进显存：四篇论文的四种内存账，与一个「统一命名空间 + 成本旋钮」的设想](09_inference_system/kv_cache/04_memory_tiering/01_memory-tiering-overview.md) - DirectKV / NEO / eLLM / Strata 四篇论文内存层级路线的横切总纲：去搬运 / 挪计算 / 并账本 / 重排调度，附按条件选路的对号表与「数字怎么读」口径清单
 - [当 KV Cache 跨过信任边界：三篇论文给出的三种泄露面，与一个「共享层级 + 默认加密」的设想](09_inference_system/kv_cache/05_kv_security/01_kv-security-overview.md) - 读行为 / 读数据 / 读时延三种取证位置：PromptPeek / Shadow in the Cache / Auditing Prompt Caching，附按角色选路的对号表，以及取证距离与防御动作同轴的成本账
-- [当复用跨出同前缀与同模型：两篇论文给出的两条扩展路径](09_inference_system/kv_cache/06_kv_reuse/01_kv-reuse-overview.md) - KVLink（文档级预计算 + link token）与 DroidSpeak（跨微调变体共享 + 关键层重算）两条路径与「数字怎么读」口径清单
+- [当复用跨出同前缀与同模型：四条路线与四种对齐开销](09_inference_system/kv_cache/06_kv_reuse/01_kv-reuse-overview.md) - KVLink（文档级预计算 + link token）、DroidSpeak（跨微调变体共享 + 关键层重算）与 CacheBlend（免训练非前缀复用）四条路线与「数字怎么读」口径清单
+- [四条路线，一条落地：vLLM 与 SGLang 的 KV 复用支持现状](09_inference_system/kv_cache/06_kv_reuse/04_framework-kv-reuse-support.md) - 三仓 HEAD 源码核对：路线 1 原生默认开且跨实例纵深（vLLM 18 connector / SGLang HiCache L3），路线 2 仅 LMCache 接线且与前缀缓存互斥（TODO 未解），路线 3/4 零实现，LoRA 被两家同构隔离
 - [当压缩表示被继续使用：三篇论文给出的三种二次决策](09_inference_system/kv_cache/07_kv_compression/01_kv-compression-overview.md) - Self-Indexing KVCache / SALS / EchoKV 把压缩产物继续用作检索索引、token 选择场与重建素材
 - [TTFT 多了 15 毫秒之后：一套实证过的 KV Cache 性能分析方法论](09_inference_system/kv_cache/08_methodology/01_kv-cache-perf-methodology.md) - 真机排查总结的六件工具与六类问题：时钟链闭合、排除链判死、仪器纪律、native 对齐，配操作清单与脱敏后的实测数字
-- [当 Agent 流量成为推理系统的主要负载](09_inference_system/agent_serving/agent-workload-serving.md) - KV 生命周期错配、调度语义失真、会话粘性与容量公式失效：Agent 负载下的四连锁问题与两引擎源码级现状
-- [约束解码的性能账单：vLLM 与 SGLang 的结构化输出实现拆解](09_inference_system/agent_serving/constrained-decoding-engines.md) - 结构化输出的编译账/每步账/交互账：双引擎实现逐项对照与 jump-forward 差异
+- [当 Agent 流量成为推理系统的主要负载](09_inference_system/agent_serving/01_agent-workload-serving.md) - KV 生命周期错配、调度语义失真、会话粘性与容量公式失效：Agent 负载下的四连锁问题与两引擎源码级现状
+- [Phase 切换从 681 秒到 6.2 秒：Evolving Infra 论文精读](09_inference_system/agent_serving/02_evolving-infra.md) - 第一个 agent-adaptive serving 框架：对称引擎原地换相、共享 L2 池 RDMA 直读、KV 目录按活跃分支计数驱逐，对 Dynamo 吞吐 1.10–2.73×、E2E 延迟降最高 4.12×，附七条口径声明
+- [基础设施的回应：当 serving 开始读懂 harness](09_inference_system/agent_serving/03_infra-response.md) - 四连锁与三件套逐项映射、SGLang role-switch 源码核对（opt-in/须排空/翻转清缓存）、九种 PD 适配方案的对照地图
+- [约束解码的性能账单：vLLM 与 SGLang 的结构化输出实现拆解](09_inference_system/agent_serving/04_constrained-decoding-engines.md) - 结构化输出的编译账/每步账/交互账：双引擎实现逐项对照与 jump-forward 差异
 - [线性注意力与推理系统](09_inference_system/linear_attention/README.md) - delta-rule 一脉（KDA/Gated DeltaNet）落地后的系统挑战：prefill 串行化、状态检查点缓存、状态语义深水区——总览 + 机制/调度/状态语义四篇
 - [HBF 是 HBM 的替代吗？单位存储便宜了，Token 成本却可能更高](09_inference_system/hbf-vs-hbm.md) - Hot Chips 2026 的 (β, α) 坐标系与 $/token 公式：单位容量便宜 8–16 倍、单位容量带宽只有 HBM 的 1/25，折算成带宽单价反而贵 1.7 倍，HBF 只在一个很窄的低带宽区间里划算
 - [Engram：条件记忆与主机内存参数](09_inference_system/engram/README.md) - DeepSeek 条件记忆（N-gram Embedding）首篇源码深读：官方 422 行 demo + SGLang 巨页手术，LPDDR 换 HBM 的优势与代价逐项算账
 - [DeepSeek 把家底搬上了昇腾：六个组件、三种双端模式与一份 950 微架构报告](09_inference_system/deepseek_ascend/deepseek-ascend-open-source.md) - 逐仓拆解 TileLang/DeepGEMM/DeepEP/TileKernels/FlashMLA/DeepSelect 的昇腾版：三种双端模式、950 微架构要点与诚实缺口清单
+- [一座 384 卡的 TokenFactory：CloudMatrix384 论文精读](09_inference_system/cloudmatrix_infer/cloudmatrix384-tokenfactory.md) - 华为超节点 + SiliconFlow 推理栈：384 张 910 连成一台机器（UB 跨节点带宽损失 <3%）、PDC 三池分离、EP320 每 die 一个专家、EMS 内存池，prefill 6,688 / decode 1,943 tokens/s/NPU 附五条口径声明
 - [KV 压缩推到极限：从架构改造到分层缓存](09_inference_system/kv_cache/07_kv_compression/README.md) - V4 与 K3 架构重写后的 KV 体积账（1M 上下文 250GB 量级 → 个位数 GB）、V4.1-Flash 技术报告精读（CED / CSA2 / FP4 KV）与 HiCache 七池八池的系统后果，三篇互为时间线
 - [Prefill 与 Decode：两阶段的推理机制](09_inference_system/prefill_decode/README.md)（[交互可视化](09_inference_system/prefill_decode/prefill_decode_visual.html) · [校验脚本](09_inference_system/prefill_decode/prefill_decode_validate.py)） - 逐步标注每步矩阵形状与计算量，从 compute-bound vs memory-bound 推导 GQA、量化、PagedAttention、Offloading、PD 分离的必然性
   - [Continuous Batching 深度解析](09_inference_system/prefill_decode/continuous_batching.md) - 静态批处理的三重浪费、vLLM V1 的 token-level 统一调度与 SGLang prefill-first 主动驱逐
 - [大模型推理并行策略](09_inference_system/parallelism/parallelism_strategies.md)（[交互可视化](09_inference_system/parallelism/parallelism_visual.html)） - DP、TP、PP、EP、SP 五种策略的统一拆解与混合部署案例
   - [专家并行（EP）深度解析](09_inference_system/parallelism/expert_parallelism_deep_dive.md) - EP 独立深度文章：DP/TP/PP 为什么解决不了 MoE、All-to-All 通信模式、EP+DP 耦合、DeepEP 低延迟后端、EPLB 负载均衡、选型决策
+- [从推理调度到 CXL 一致性：SOSP 2026 十三篇系统论文精读](09_inference_system/sosp2026/sosp2026-systems-review.md) - OS 顶会 13 篇综述（AI 相关 9 篇 + CXL 介质层 4 篇）：Janus 多 LLM 调度、Bedrock 全球多区域服务、LLM-42 确定性推理、ACDC 离线推理刻画、StreamEP 无屏障 MoE 解码、CrystalLLM 训练仿真、Ave agentic 内核优化、YoloFS Agent 原生文件系统、Skill VM、Borges CXL 共享日志、Disk-Based LSMs 索引、StarfishOS 单系统映像、XTRA 分布式事务，四条主线 + 折扣清单，分篇笔记与 PDF 同目录归档
 
 ### 9.2 核心框架与平台
 
@@ -610,13 +623,13 @@ DeepSeek 模型极致性能优化实战，深度解析 vLLM 宽端点 (Wide Endp
 
 **智能体设计模式**：
 
-- [ReAct Agent 模式详解](08_agentic_system/agent_design/docs/react-agent.md) - 推理与行动深度协同的经典机制
-- [写作 Agent 设计](08_agentic_system/agent_design/docs/writing-agentic-agent.md) - 针对复杂长文本内容创作的架构设计
-- [指代消解系统设计](08_agentic_system/agent_design/docs/coreference-resolution-dialogue-system.md) - 高级对话状态管理与多轮交互技术
+- [ReAct Agent 模式详解](08_agentic_system/agent_design/deep-dives/01_react-agent.md) - 推理与行动深度协同的经典机制
+- [写作 Agent 设计](08_agentic_system/agent_design/deep-dives/03_writing-agentic-agent.md) - 针对复杂长文本内容创作的架构设计
+- [指代消解系统设计](08_agentic_system/agent_design/deep-dives/04_coreference-resolution-dialogue-system.md) - 高级对话状态管理与多轮交互技术
 - [12-Factor Agents](08_agentic_system/concepts/12-factor-agents-intro.md) - 构建高可靠、可扩展 LLM 应用的 12 要素原则
-- [TradingAgents-CN 设计](08_agentic_system/agent_design/docs/trading-agents-cn.md) - 交易领域的智能体设计与交互分析
-- [AI Agent 设计模式](08_agentic_system/agent_design/docs/ai-agent-design-patterns.pptx) - 企业级智能体架构设计模式
-- [All Agentic Architectures 深入详解](08_agentic_system/agent_design/docs/all-agentic-architectures-deep-dive.md) - 17 种 Agent 架构深度对比与实现解析
+- [TradingAgents-CN 设计](08_agentic_system/agent_design/deep-dives/05_trading-agents-cn.md) - 交易领域的智能体设计与交互分析
+- [AI Agent 设计模式](08_agentic_system/agent_design/deep-dives/ai-agent-design-patterns.pptx) - 企业级智能体架构设计模式
+- [All Agentic Architectures 深入详解](08_agentic_system/agent_design/deep-dives/02_all-agentic-architectures-deep-dive.md) - 17 种 Agent 架构深度对比与实现解析
 
 **数据智能体 (Data Agents)**：
 
