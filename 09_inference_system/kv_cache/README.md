@@ -210,9 +210,10 @@ FAST '26（2026-02）的「AI and LLMs」两个 session 用九篇论文回答了
 
 > 从 2026 KV Cache 专题调研的录用论文里选出的首条深读线——把筛选级的 venue 核实升级为逐篇页码级精读（总纲做横向对照，四篇各自附精读报告）。
 
-- **[当 KV 装不进显存：四篇论文的四种内存账，与一个「统一命名空间 + 成本旋钮」的设想](04_memory_tiering/01_memory-tiering-overview.md)**：四篇 2025–2026 正式录用论文的横切总纲——去搬运 / 挪计算 / 并账本 / 重排调度四条路线、按条件选路的对号表、四篇的「数字怎么读」口径清单，与一个「统一命名空间 + 成本旋钮」的设想（§五）。
+- **[当 KV 装不进显存：五篇论文的五种内存账，与一个「统一命名空间 + 成本旋钮」的设想](04_memory_tiering/01_memory-tiering-overview.md)**：2025–2026 五篇论文的横切总纲——去搬运 / 挪计算 / 并账本 / 重排调度 / 不迁移五条路线、按条件选路的对号表、五篇的「数字怎么读」口径清单，与一个「统一命名空间 + 成本旋钮」的设想（§五，FlatCake 的 GVA 是其 KV 场景软件实现）。
 - 单篇精读：[DirectKV](04_memory_tiering/02_directkv.md)（OSDI '26，零拷贝 offload）· [NEO](04_memory_tiering/03_neo.md)（MLSys 2025，decoding attention 下移 CPU）· [eLLM](04_memory_tiering/04_ellm.md)（DAC 2026，弹性内存池）· [Strata](04_memory_tiering/05_strata.md)（OSDI '26，分层上下文缓存）
-- 精读报告（Agent 全文逐条页码核对，口径限定集中标注）：[directkv](04_memory_tiering/references/directkv-report.md) · [neo](04_memory_tiering/references/neo-report.md) · [ellm](04_memory_tiering/references/ellm-report.md) · [strata](04_memory_tiering/references/strata-report.md)；论文原文 PDF 在 `04_memory_tiering/references/papers/`
+- **[FlatCake：分层存储的两个前提同时破产](04_memory_tiering/06_flatcake.md)**（arXiv 2610.38355，反思篇）：对「HBM→DRAM→SSD 三层分级」前提本身的证伪——8 条生产 trace 显示双峰复用击穿 DRAM 时间过滤、staging 争用与淘汰序布局拖垮 SSD 恢复；扁平对等架构（写时定位、64 位 GVA 地址即介质标签、永不迁移）把 Claude Code 生产 trace 的命中率按在 94.2%–94.6%，消除 Mooncake 的 6.5× 读放大。也是总纲 §五「统一命名空间」设想的纯软件实现，第五条路线：不迁移。
+- 精读报告（Agent 全文逐条页码核对，口径限定集中标注）：[directkv](04_memory_tiering/references/directkv-report.md) · [neo](04_memory_tiering/references/neo-report.md) · [ellm](04_memory_tiering/references/ellm-report.md) · [strata](04_memory_tiering/references/strata-report.md)；论文原文 PDF 在 `04_memory_tiering/references/papers/`（含 flatcake）
 
 ---
 
@@ -256,3 +257,4 @@ FAST '26（2026-02）的「AI and LLMs」两个 session 用九篇论文回答了
 > 前面十个部分回答「机制是什么、怎么设计」；这一篇回答「慢了怎么查」。来自给生产级推理引擎（vLLM/SGLang）接入远端 KV Cache 层的真机实战，方法论与案例数字均经脱敏与核实。
 
 - **[TTFT 多了 15 毫秒之后：一套实证过的 KV Cache 性能分析方法论](08_methodology/01_kv-cache-perf-methodology.md)** — 六件分析工具（时钟链分解+闭合校验、排除链+判别实验、同轮对照+锚点归一、观测口径纪律、native 对齐清单、微基准先行）与六类问题（介质与拷贝几何、宿主侧 Python 税、同步与放行契约、步级管线、布局与寻址、观测元层），附七步操作清单与十四个脱敏案例；配两张手绘图。
+- **[从 TTFT 到 goodput：官方基准工具的口径与六个陷阱](08_methodology/02_inference-benchmark-methodology.md)** — vLLM serve.py 与 SGLang benchmark/serving.py 的指标口径对照（TTFT/TPOT/ITL/E2EL 定义、百分位默认差异、goodput 判定）、agentic-rollout 会话仿真器的 turn 级指标与三层命中率，以及六个源码级测错点：非流式 TTFT 不可比、默认百分位缺列、ignore_eos 两边默认相反、缓存污染不设防、token 计数双轨、客户端排队混入 TTFT。
