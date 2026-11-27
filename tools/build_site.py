@@ -172,16 +172,46 @@ def sort_key(p: pathlib.Path):
     return (0, int(m.group(1)), name.lower()) if m else (1, 0, name.lower())
 
 
+SKIPPED_READMES = []  # 纯素材目录的 README，写进 mkdocs not_in_nav
+
+def _md_count_under(d: pathlib.Path) -> int:
+    """目录下除 README.md 外的文章数——纯素材目录为 0。"""
+    return sum(1 for x in d.rglob("*.md") if x.name != "README.md")
+
+def _readme_order(base: pathlib.Path, children):
+    """按目录 README 里链接的出现顺序排 children；未链接的垫底（保持编号→字母序）。"""
+    rd = base / "README.md"
+    if not rd.exists():
+        return children
+    rank = {}
+    r = 0
+    for link in re.findall(r"\[[^\]]*\]\(([^)]+)\)", rd.read_text(errors="ignore")):
+        t = link.split("#")[0].strip()
+        if not t or re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", t):
+            continue  # 外链 / mailto
+        t = urllib.parse.unquote(t)
+        target = pathlib.Path(posixpath.normpath((base / t).as_posix()))
+        for c in children:
+            if c == target or (c.is_dir() and target.is_relative_to(c)):
+                rank.setdefault(c, r)
+                break
+        r += 1
+    return sorted(children, key=lambda c: (rank.get(c, 10 ** 9), sort_key(c)))
+
 def nav_tree(base: pathlib.Path, rel_prefix=""):
-    """返回该目录的 nav 列表（dict/list 混合，json 序列化进 mkdocs.yml）。"""
     items = []
-    entries = sorted(
-        [p for p in base.iterdir()
-         if not p.name.startswith(".")
-         and p.name not in SKIP_DIRS
-         and (p.is_dir() or p.suffix.lower() == ".md")],
-        key=sort_key,
-    )
+    entries = [p for p in base.iterdir()
+               if not p.name.startswith(".")
+               and p.name not in SKIP_DIRS
+               and (p.is_dir() or p.suffix.lower() == ".md")]
+    # 纯素材目录（只有 README 没有别的文章）不进导航
+    kept = []
+    for p in entries:
+        if p.is_dir() and (p / "README.md").exists() and _md_count_under(p) == 0:
+            SKIPPED_READMES.append(rel_prefix + "README.md")
+            continue
+        kept.append(p)
+    entries = _readme_order(base, sorted(kept, key=sort_key))
     for p in entries:
         rel = (rel_prefix + p.name) if rel_prefix else p.name
         if p.is_dir():
@@ -192,7 +222,6 @@ def nav_tree(base: pathlib.Path, rel_prefix=""):
             continue  # 由父层作为章节首页插入
         else:
             items.append({file_title(p): rel})
-    # 目录自身的 README 作为章节首页，插在最前（section-index 渲染为可点的章节链接）
     readme = base / "README.md"
     if readme.exists():
         has_own_index = any((base / x).exists() for x in ("index.html", "index.md"))
@@ -532,6 +561,9 @@ def main():
     cfg += "extra_javascript:\n" + "".join(f"  - {u}\n" for u in vendored)
     nav_yaml = yaml.safe_dump(nav, allow_unicode=True, sort_keys=False, width=120, default_flow_style=False)
     cfg += "nav:\n" + nav_yaml
+    skipped = list(dict.fromkeys(SKIPPED_READMES))  # 去重保序
+    if skipped:
+        cfg += "not_in_nav: |\n" + "".join(f"  {p}\n" for p in skipped)
     (BUILD / "mkdocs.yml").write_text(cfg, encoding="utf-8")
     print(f"完成：{len(nav)} 个一级章节 → build/mkdocs.yml；接下来 mkdocs build -f build/mkdocs.yml")
 
